@@ -1,188 +1,301 @@
-// Mobile Menu
-const mobileMenuBtn = document.querySelector(".menu-icon");
-const mobileMenu = document.querySelector(".header__menu--list");
-const darkBackground = document.querySelector(".dark-background");
+// Abstract class for TodoItemFormatter
+class TodoItemFormatter {
+  formatTask(task) {
+    return task.length > 14 ? task.slice(0, 14) + "..." : task;
+  }
 
-mobileMenuBtn.onclick = () => {
-    darkBackground.classList.toggle("active");
-    mobileMenu.classList.toggle("active");
+  formatDueDate(dueDate) {
+    return dueDate || "No due date";
+  }
 
-    mobileMenu.classList.contains("active")
-        ? mobileMenuBtn.src = "./images/icon-close.svg"
-        : mobileMenuBtn.src = "./images/icon-menu.svg";
+  formatStatus(completed) {
+    return completed ? "Completed" : "Pending";
+  }
 }
 
+// Class responsible for managing Todo items
+class TodoManager {
+  constructor(todoItemFormatter) {
+    this.todos = JSON.parse(localStorage.getItem("todos")) || [];
+    this.todoItemFormatter = todoItemFormatter;
+  }
 
-// Image Slider
-const sliderImgSelector = document.querySelectorAll(".slider__selector--img img");
-const sliderImg = document.querySelector(".slider__img");
+  addTodo(task, dueDate) {
+    const newTodo = {
+      id: this.getRandomId(),
+      task: this.todoItemFormatter.formatTask(task),
+      dueDate: this.todoItemFormatter.formatDueDate(dueDate),
+      completed: false,
+      status: "pending",
+    };
+    this.todos.push(newTodo);
+    this.saveToLocalStorage();
+    return newTodo;
+  }
 
-sliderImgSelector.forEach(el => {
-    el.addEventListener("click", () => {
-        sliderImg.src = `/images/image-product-${el.getAttribute("value")}.jpg`;
-    });
-});
+  editTodo(id, updatedTask) {
+      const todo = this.todos.find((t) => t.id === id);
+      if (todo) {
+        todo.task = updatedTask;
+        this.saveToLocalStorage();
+      }
+      return todo;
+    }
+  
+    deleteTodo(id) {
+      this.todos = this.todos.filter((todo) => todo.id !== id);
+      this.saveToLocalStorage();
+    }
+  
+    toggleTodoStatus(id) {
+      const todo = this.todos.find((t) => t.id === id);
+      if (todo) {
+        todo.completed = !todo.completed;
+        this.saveToLocalStorage();
+      }
+    }
+  
+    clearAllTodos() {
+      if (this.todos.length > 0) {
+        this.todos = [];
+        this.saveToLocalStorage();
+      }
+    }
+  
+    filterTodos(status) {
+      switch (status) {
+        case "all":
+          return this.todos;
+        case "pending":
+          return this.todos.filter((todo) => !todo.completed);
+        case "completed":
+          return this.todos.filter((todo) => todo.completed);
+        default:
+          return [];
+      }
+    }
+  
+    getRandomId() {
+      return (
+        Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15)
+      );
+    }
+  
+    saveToLocalStorage() {
+      localStorage.setItem("todos", JSON.stringify(this.todos));
+    }
+}
 
+// Class responsible for managing the UI and handling events
+class UIManager {
+  constructor(todoManager, todoItemFormatter) {
+    this.todoManager = todoManager;
+    this.todoItemFormatter = todoItemFormatter;
+    this.taskInput = document.querySelector("input");
+    this.dateInput = document.querySelector(".schedule-date");
+    this.addBtn = document.querySelector(".add-task-button");
+    this.todosListBody = document.querySelector(".todos-list-body");
+    this.alertMessage = document.querySelector(".alert-message");
+    this.deleteAllBtn = document.querySelector(".delete-all-btn");
 
-// Arrow Image Slider
-const sliderArrowPrevious = document.querySelector(".previous");
-const sliderArrowNext = document.querySelector(".next");
+  this.addEventListeners();
+  this.showAllTodos();
+  }
 
-let counter = 1;
+  addEventListeners() {
+      // Event listener for adding a new todo
+      this.addBtn.addEventListener("click", () => {
+          this.handleAddTodo();
+      });
 
-const previousImg = (img) => {
-    if (counter > 1) {
-        counter--;
-        img.src = `/images/image-product-${counter}.jpg`;
+      // Event listener for pressing Enter key in the task input
+      this.taskInput.addEventListener("keyup", (e) => {
+          if (e.keyCode === 13 && this.taskInput.value.length > 0) {
+              this.handleAddTodo();
+          }
+      });
+
+      // Event listener for deleting all todos
+      this.deleteAllBtn.addEventListener("click", () => {
+          this.handleClearAllTodos();
+      });
+
+      // Event listeners for filter buttons
+      const filterButtons = document.querySelectorAll(".todos-filter li");
+      filterButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+              const status = button.textContent.toLowerCase();
+              this.handleFilterTodos(status);
+          });
+      });
+  }
+
+  handleAddTodo() {
+    const task = this.taskInput.value;
+    const dueDate = this.dateInput.value;
+    if (task === "") {
+      this.showAlertMessage("Please enter a task", "error");
     } else {
-        counter = 4;
-        img.src = `/images/image-product-${counter}.jpg`;
+      const newTodo = this.todoManager.addTodo(task, dueDate);
+      this.showAllTodos();
+      this.taskInput.value = "";
+      this.dateInput.value = "";
+      this.showAlertMessage("Task added successfully", "success");
     }
-}
+  }
 
-const nextImg = (img) => {
-    if (counter < 4) {
-        counter++;
-        img.src = `/images/image-product-${counter}.jpg`;
-    } else {
-        counter = 1;
-        img.src = `/images/image-product-${counter}.jpg`;
+  handleClearAllTodos() {
+    this.todoManager.clearAllTodos();
+    this.showAllTodos();
+    this.showAlertMessage("All todos cleared successfully", "success");
+  }
+
+  showAllTodos() {
+    const todos = this.todoManager.filterTodos("all");
+    this.displayTodos(todos);
+  }
+
+  displayTodos(todos) {
+
+      this.todosListBody.innerHTML = "";
+      
+      if (todos.length === 0) {
+          this.todosListBody.innerHTML = `<tr><td colspan="5" class="text-center">No task found</td></tr>`;
+          return;
+        }
+        
+      todos.forEach((todo) => {
+        this.todosListBody.innerHTML += `
+          <tr class="todo-item" data-id="${todo.id}">
+            <td>${this.todoItemFormatter.formatTask(todo.task)}</td>
+            <td>${this.todoItemFormatter.formatDueDate(todo.dueDate)}</td>
+            <td>${this.todoItemFormatter.formatStatus(todo.completed)}</td>
+            <td>
+              <button class="btn btn-warning btn-sm" onclick="uiManager.handleEditTodo('${
+                todo.id
+              }')">
+                <i class="bx bx-edit-alt bx-bx-xs"></i>    
+              </button>
+              <button class="btn btn-success btn-sm" onclick="uiManager.handleToggleStatus('${
+                todo.id
+              }')">
+                <i class="bx bx-check bx-xs"></i>
+              </button>
+              <button class="btn btn-error btn-sm" onclick="uiManager.handleDeleteTodo('${
+                todo.id
+              }')">
+                <i class="bx bx-trash bx-xs"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      });
     }
+    
+
+  
+handleEditTodo(id) {
+  const todo = this.todoManager.todos.find((t) => t.id === id);
+  if (todo) {
+    this.taskInput.value = todo.task;
+    this.todoManager.deleteTodo(id);
+
+    const handleUpdate = () => {
+      this.addBtn.innerHTML = "<i class='bx bx-plus bx-sm'></i>";
+      this.showAlertMessage("Todo updated successfully", "success");
+      this.showAllTodos();
+      this.addBtn.removeEventListener("click", handleUpdate);
+    };
+
+    this.addBtn.innerHTML = "<i class='bx bx-check bx-sm'></i>";
+    this.addBtn.addEventListener("click", handleUpdate);
+  }
 }
 
-sliderArrowPrevious.onclick = () => previousImg(sliderImg);
-sliderArrowNext.onclick = () => nextImg(sliderImg);
 
-
-// Slider Image Focus
-const sliderImgFocus = document.querySelector(".slider__focus--img img");
-const sliderFocus = document.querySelector(".slider-focus");
-const closeIcon = document.querySelector(".close-icon");
-
-const sliderArrowFocusPrevious = document.querySelector(".focus-previous");
-const sliderArrowFocusNext = document.querySelector(".focus-next");
-
-sliderImg.onclick = () => {
-    if (window.innerWidth >= 850) {
-        darkBackground.classList.add("active");
-        sliderFocus.classList.add("active");
-    }
+handleToggleStatus(id) {
+this.todoManager.toggleTodoStatus(id);
+this.showAllTodos();
 }
 
-closeIcon.onclick = () => {
-    darkBackground.classList.remove("active");
-    sliderFocus.classList.remove("active");
+handleDeleteTodo(id) {
+this.todoManager.deleteTodo(id);
+this.showAlertMessage("Todo deleted successfully", "success");
+this.showAllTodos();
 }
 
-const sliderFocusImgSelector = document.querySelectorAll(".slider__selector--focus-img img");
 
-sliderFocusImgSelector.forEach(el => {
-    el.addEventListener("click", () => {
-        sliderImgFocus.src = `/images/image-product-${el.getAttribute("focus-value")}.jpg`;
-        counter = el.id;
+handleFilterTodos(status) {
+  const filteredTodos = this.todoManager.filterTodos(status);
+  this.displayTodos(filteredTodos);
+}
 
-        sliderFocusImgSelector.forEach(el => el.classList.remove("selected"));
-        el.classList.add("selected");
+
+showAlertMessage(message, type) {
+const alertBox = `
+  <div class="alert alert-${type} shadow-lg mb-5 w-full">
+    <div>
+      <span>${message}</span>
+    </div>
+  </div>
+`;
+this.alertMessage.innerHTML = alertBox;
+this.alertMessage.classList.remove("hide");
+this.alertMessage.classList.add("show");
+setTimeout(() => {
+  this.alertMessage.classList.remove("show");
+  this.alertMessage.classList.add("hide");
+}, 3000);
+}
+}
+
+// Class responsible for managing the theme switcher
+class ThemeSwitcher {
+constructor(themes, html) {
+  this.themes = themes;
+  this.html = html;
+  this.init();
+}
+
+init() {
+  const theme = this.getThemeFromLocalStorage();
+  if (theme) {
+    this.setTheme(theme);
+  }
+
+  this.addThemeEventListeners();
+}
+
+addThemeEventListeners() {
+  this.themes.forEach((theme) => {
+    theme.addEventListener("click", () => {
+      const themeName = theme.getAttribute("theme");
+      this.setTheme(themeName);
+      this.saveThemeToLocalStorage(themeName);
     });
-});
-
-sliderArrowFocusPrevious.onclick = () => {
-    previousImg(sliderImgFocus);
-    sliderFocusImgSelector.forEach(el => el.classList.remove("selected"));
-
-    let selectedImg = document.querySelector(`[focus-value="${counter}"]`);
-    selectedImg.classList.add("selected");
-};
-
-sliderArrowFocusNext.onclick = () => {
-    nextImg(sliderImgFocus);
-    sliderFocusImgSelector.forEach(el => el.classList.remove("selected"));
-    
-    let selectedImg = document.querySelector(`[focus-value="${counter}"]`);
-    selectedImg.classList.add("selected");
-};
-
-
-// input
-const input = document.querySelector(".order__quantity--input");
-const minusBtn = document.querySelector(".minus");
-const plusBtn = document.querySelector(".plus");
-
-minusBtn.onclick = () => (input.value > 0) ?input.value-- :input.value;
-plusBtn.onclick = () => input.value++;
-
-
-// Add to cart & Remove from cart
-const cartBtn = document.querySelector(".header__cart-icon");
-const cart = document.querySelector(".cart");
-const cartQuantityBubble = document.querySelector(".cart-icon--quantity");
-const addToCartBtn = document.querySelector(".order__cart");
-const cartContainer = document.querySelector(".cart-content");
-const productElement = document.createElement("div");
-const removeFromCartBtn = document.createElement("button");
-
-cartBtn.onclick = () => cart.classList.toggle("active");
-
-productElement.classList.add("cart__product");
-removeFromCartBtn.classList.add(".cart__product--delete");
-removeFromCartBtn.innerHTML = `<img src="./images/icon-delete.svg" alt="">`;
-
-let product = {
-    name: "Fall Limited Edition Sneakers",
-    price : 125,
-    quantity: sessionStorage.getItem("quantity") || 0,
-};
-
-
-const updateCart = () => {
-    cartContainer.classList.remove("empty");
-    cartQuantityBubble.classList.remove("empty");
-    cartQuantityBubble.innerText = product.quantity;
-
-    let total = product.price * product.quantity;
-
-    let htmlCode = 
-        `<img class="cart__product--img" src="./images/image-product-1-thumbnail.jpg" alt="">
-
-        <div class="cart__product--info">
-            <p class="cart__info--title">${product.name}</p>
-            <span class="cart__info--quantity">$${product.price} x ${product.quantity}</span>
-            <b class="cart__info--price">$${total}.00 </b>
-        </div>`;
-
-    productElement.innerHTML = htmlCode;
-    productElement.appendChild(removeFromCartBtn);
-    cartContainer.appendChild(productElement);
+  });
 }
 
-const addToCart = () => {
-    if (input.value <= 0 || input.value == undefined || null) {
-            alert("error");
-            return;
-    }
-    
-    cart.classList.add("active");
-    cartContainer.classList.remove("empty");
-    
-    product.quantity = parseInt(product.quantity) + parseInt(input.value);
-
-    updateCart();
-    sessionStorage.setItem("quantity", product.quantity);
-};
-
-const removeFromCart = () => {
-    if (!cartContainer.classList.contains("empty")) {
-        cartContainer.removeChild(productElement);
-        cartContainer.classList.add("empty");
-        cartQuantityBubble.innerText = "";
-        product.quantity = 0;
-        sessionStorage.setItem("quantity", product.quantity);
-    }
-};
-
-addToCartBtn.onclick = () => addToCart();
-removeFromCartBtn.onclick = () => removeFromCart();
-
-if (sessionStorage.getItem("quantity") >= 1) {
-    updateCart();
+setTheme(themeName) {
+  this.html.setAttribute("data-theme", themeName);
 }
+
+saveThemeToLocalStorage(themeName) {
+  localStorage.setItem("theme", themeName);
+}
+
+getThemeFromLocalStorage() {
+  return localStorage.getItem("theme");
+}
+}
+
+
+
+// Instantiating the classes
+const todoItemFormatter = new TodoItemFormatter();
+const todoManager = new TodoManager(todoItemFormatter);
+const uiManager = new UIManager(todoManager, todoItemFormatter);
+const themes = document.querySelectorAll(".theme-item");
+const html = document.querySelector("html");
+const themeSwitcher = new ThemeSwitcher(themes, html);
